@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI Agent Test</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-100 p-10">
+
+<div class="max-w-3xl mx-auto bg-white p-6 rounded-xl shadow">
+
+<h1 class="text-2xl font-bold mb-6">AI Agent Test Console</h1>
+
+<!-- CHAT TEST -->
+<div class="mb-10">
+<h2 class="text-xl font-semibold mb-3">Test Chat AI</h2>
+
+<input id="chatInput"
+class="border p-2 w-full rounded mb-2"
+placeholder="Tulis pesan..." />
+
+<button onclick="sendChat()"
+class="bg-blue-600 text-white px-4 py-2 rounded">
+Kirim
+</button>
+
+<div id="chatResult"
+class="mt-4 p-3 bg-gray-100 rounded"></div>
+</div>
+
+<!-- BOOKING TEST -->
+<div>
+
+<h2 class="text-xl font-semibold mb-3">Test Booking</h2>
+
+<input id="name"
+class="border p-2 w-full mb-2 rounded"
+placeholder="Nama" />
+
+<input id="email"
+class="border p-2 w-full mb-2 rounded"
+placeholder="Email" />
+
+<input id="date"
+type="datetime-local"
+class="border p-2 w-full mb-2 rounded" />
+
+<textarea id="notes"
+class="border p-2 w-full mb-2 rounded"
+placeholder="Catatan"></textarea>
+
+<button onclick="bookMeeting()"
+class="bg-green-600 text-white px-4 py-2 rounded">
+Book Meeting
+</button>
+
+<div id="bookingResult"
+class="mt-4 p-3 bg-gray-100 rounded"></div>
+
+</div>
+
+</div>
+
+<script>
+
+const API_URL =
+"https://script.google.com/macros/s/AKfycbzcjf4do4cIsGOAvVinp4eNvLBt1LKpwe1JOa_5PzZQv3vSsnxPZmlWq51urVUjA4IL/exec";
+
+
+/* ======================
+   CHAT TEST
+====================== */
+
+async function sendChat() {
+
+const message = document.getElementById("chatInput").value;
+
+const res = await fetch(API_URL, {
+method: "POST",
+headers: {
+"Content-Type": "application/json"
+},
+body: JSON.stringify({
+action: "chat",
+message: message,
+session_id: "test-session"
+})
+});
+
+const data = await res.json();
+
+document.getElementById("chatResult").innerText =
+data.reply || JSON.stringify(data);
+
+}
+
+
+/* ======================
+   BOOKING TEST
+====================== */
+
+async function bookMeeting() {
+
+const name = document.getElementById("name").value;
+const email = document.getElementById("email").value;
+const date = document.getElementById("date").value;
+const notes = document.getElementById("notes").value;
+
+const res = await fetch(API_URL, {
+method: "POST",
+headers: {
+"Content-Type": "application/json"
+},
+body: JSON.stringify({
+action: "booking",
+name: name,
+email: email,
+date: date,
+notes: notes
+})
+});
+
+const data = await res.json();
+
+document.getElementById("bookingReult").innerText =
+JSON.stringify(data, null, 2);
+
+}
+
+</script>
+
+</body>
+</html>
