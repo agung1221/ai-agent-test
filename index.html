@@ -1,134 +1,292 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
-<meta charset="UTF-8">
-<title>AI Agent Test</title>
-<script src="https://cdn.tailwindcss.com"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agent Tester</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar untuk area chat */
+        .chat-scroll::-webkit-scrollbar { width: 6px; }
+        .chat-scroll::-webkit-scrollbar-track { background: transparent; }
+        .chat-scroll::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+        
+        /* Toast Animation */
+        .toast-enter { animation: slideIn 0.3s ease-out forwards; }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    </style>
 </head>
+<body class="bg-gray-50 text-gray-800 min-h-screen p-4 md:p-8 font-sans">
 
-<body class="bg-gray-100 p-10">
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-3xl font-bold text-center text-blue-600 mb-8">AI Agent & Booking Dashboard</h1>
 
-<div class="max-w-3xl mx-auto bg-white p-6 rounded-xl shadow">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            
+            <!-- ================= CHAT AI SECTION ================= -->
+            <div class="bg-white rounded-xl shadow-lg flex flex-col h-[600px] border border-gray-100">
+                <div class="bg-blue-600 text-white p-4 rounded-t-xl font-semibold flex justify-between items-center">
+                    <span>💬 Chat dengan AI Agent</span>
+                    <span class="text-xs bg-blue-500 px-2 py-1 rounded" id="session-display">Session: ...</span>
+                </div>
+                
+                <!-- Chat History -->
+                <div id="chat-box" class="flex-1 p-4 overflow-y-auto chat-scroll flex flex-col gap-3">
+                    <!-- Default message -->
+                    <div class="flex justify-start">
+                        <div class="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg rounded-tl-none max-w-[80%]">
+                            Halo! Saya AI Agent. Ada yang bisa saya bantu hari ini?
+                        </div>
+                    </div>
+                </div>
 
-<h1 class="text-2xl font-bold mb-6">AI Agent Test Console</h1>
+                <!-- Chat Input -->
+                <div class="p-4 border-t border-gray-200">
+                    <form id="chat-form" class="flex gap-2">
+                        <input type="text" id="chat-input" placeholder="Ketik pesan Anda..." class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        <button type="submit" id="chat-btn" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition flex items-center justify-center min-w-[80px]">
+                            Kirim
+                        </button>
+                    </form>
+                </div>
+            </div>
 
-<!-- CHAT TEST -->
-<div class="mb-10">
-<h2 class="text-xl font-semibold mb-3">Test Chat AI</h2>
+            <!-- ================= FORMS SECTION ================= -->
+            <div class="flex flex-col gap-8">
 
-<input id="chatInput"
-class="border p-2 w-full rounded mb-2"
-placeholder="Tulis pesan..." />
+                <!-- BOOKING FORM -->
+                <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">📅 Buat Jadwal Konsultasi (Booking)</h2>
+                    <form id="booking-form" class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-1">Nama Lengkap</label>
+                                <input type="text" id="b-name" class="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-1">Email</label>
+                                <input type="email" id="b-email" class="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none" required>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-600 mb-1">Pilih Tanggal & Jam</label>
+                            <!-- Input datetime-local otomatis format ISO saat diparse -->
+                            <input type="datetime-local" id="b-date" class="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-600 mb-1">Catatan Tambahan</label>
+                            <textarea id="b-notes" rows="2" class="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                        </div>
+                        <button type="submit" id="btn-booking" class="w-full bg-green-600 text-white py-2 rounded-md hover:bg-green-700 transition font-semibold flex justify-center items-center">
+                            Proses Booking
+                        </button>
+                    </form>
+                </div>
 
-<button onclick="sendChat()"
-class="bg-blue-600 text-white px-4 py-2 rounded">
-Kirim
-</button>
+                <!-- LEAD CAPTURE FORM -->
+                <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">🎯 Simpan Data Lead (Manual)</h2>
+                    <form id="lead-form" class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-1">Nama Lengkap</label>
+                                <input type="text" id="l-name" class="w-full px-3 py-2 border rounded-md outline-none focus:ring-2 focus:ring-purple-500" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-1">Email</label>
+                                <input type="email" id="l-email" class="w-full px-3 py-2 border rounded-md outline-none focus:ring-2 focus:ring-purple-500" required>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-600 mb-1">Ketertarikan (Interest)</label>
+                            <input type="text" id="l-interest" placeholder="Contoh: Pembuatan Chatbot" class="w-full px-3 py-2 border rounded-md outline-none focus:ring-2 focus:ring-purple-500" required>
+                        </div>
+                        <button type="submit" id="btn-lead" class="w-full bg-purple-600 text-white py-2 rounded-md hover:bg-purple-700 transition font-semibold flex justify-center items-center">
+                            Simpan Lead
+                        </button>
+                    </form>
+                </div>
 
-<div id="chatResult"
-class="mt-4 p-3 bg-gray-100 rounded"></div>
-</div>
+            </div>
+        </div>
+    </div>
 
-<!-- BOOKING TEST -->
-<div>
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2"></div>
 
-<h2 class="text-xl font-semibold mb-3">Test Booking</h2>
+    <!-- ================= JAVASCRIPT LOGIC ================= -->
+    <script>
+        // URL Web App GAS Anda
+        const API_URL = "https://script.google.com/macros/s/AKfycbyviiqB5Qg3VjigHW7t9N79UQslMsNV8sfD0NQOmeDqs7aZqxBfcTUDiz4_upZHDwRR/exec";
+        
+        // Generate Session ID acak untuk Chat
+        const SESSION_ID = 'sess-' + Math.random().toString(36).substr(2, 9);
+        document.getElementById('session-display').innerText = `Session: ${SESSION_ID}`;
 
-<input id="name"
-class="border p-2 w-full mb-2 rounded"
-placeholder="Nama" />
+        // Utility: Fetch ke GAS (Trick CORS dengan text/plain)
+        async function fetchAPI(payload) {
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    // Menggunakan text/plain agar tidak memicu strict CORS preflight di browser
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload)
+                });
+                return await response.json();
+            } catch (error) {
+                console.error("Fetch Error:", error);
+                throw new Error("Gagal terhubung ke server.");
+            }
+        }
 
-<input id="email"
-class="border p-2 w-full mb-2 rounded"
-placeholder="Email" />
+        // Utility: Show Toast Notification
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            const bgColor = type === 'success' ? 'bg-green-500' : 'bg-red-500';
+            toast.className = `${bgColor} text-white px-6 py-3 rounded shadow-lg toast-enter flex items-center`;
+            toast.innerHTML = message;
+            
+            const container = document.getElementById('toast-container');
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.5s';
+                setTimeout(() => toast.remove(), 500);
+            }, 3000);
+        }
 
-<input id="date"
-type="datetime-local"
-class="border p-2 w-full mb-2 rounded" />
+        // ================= LOGIC CHAT =================
+        const chatForm = document.getElementById('chat-form');
+        const chatInput = document.getElementById('chat-input');
+        const chatBox = document.getElementById('chat-box');
+        const chatBtn = document.getElementById('chat-btn');
 
-<textarea id="notes"
-class="border p-2 w-full mb-2 rounded"
-placeholder="Catatan"></textarea>
+        function appendMessage(sender, text) {
+            const div = document.createElement('div');
+            div.className = sender === 'user' ? 'flex justify-end' : 'flex justify-start';
+            
+            const bubble = document.createElement('div');
+            bubble.className = sender === 'user' 
+                ? 'bg-blue-600 text-white px-4 py-2 rounded-lg rounded-tr-none max-w-[80%]' 
+                : 'bg-gray-100 text-gray-800 px-4 py-2 rounded-lg rounded-tl-none max-w-[80%] whitespace-pre-wrap';
+            
+            bubble.innerText = text;
+            div.appendChild(bubble);
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight; // Auto scroll ke bawah
+        }
 
-<button onclick="bookMeeting()"
-class="bg-green-600 text-white px-4 py-2 rounded">
-Book Meeting
-</button>
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = chatInput.value.trim();
+            if (!message) return;
 
-<div id="bookingResult"
-class="mt-4 p-3 bg-gray-100 rounded"></div>
+            // UI Update
+            appendMessage('user', message);
+            chatInput.value = '';
+            chatBtn.disabled = true;
+            chatBtn.innerText = '...';
 
-</div>
+            // Element Loading AI
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'flex justify-start text-sm text-gray-500 italic';
+            loadingDiv.innerText = 'AI sedang mengetik...';
+            chatBox.appendChild(loadingDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
 
-</div>
+            try {
+                const res = await fetchAPI({ action: 'chat', message: message, session_id: SESSION_ID });
+                loadingDiv.remove();
+                if(res.reply) {
+                    appendMessage('ai', res.reply);
+                } else {
+                    appendMessage('ai', "Error: Tidak ada balasan dari server.");
+                }
+            } catch (err) {
+                loadingDiv.remove();
+                appendMessage('ai', "Maaf, terjadi kesalahan jaringan.");
+            } finally {
+                chatBtn.disabled = false;
+                chatBtn.innerText = 'Kirim';
+            }
+        });
 
-<script>
+        // ================= LOGIC BOOKING =================
+        const bookingForm = document.getElementById('booking-form');
+        const btnBooking = document.getElementById('btn-booking');
 
-const API_URL =
-"https://script.google.com/macros/s/AKfycbyviiqB5Qg3VjigHW7t9N79UQslMsNV8sfD0NQOmeDqs7aZqxBfcTUDiz4_upZHDwRR/exec";
+        bookingForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            btnBooking.disabled = true;
+            btnBooking.innerHTML = 'Memproses...';
 
+            // Ambil format datetime local (YYYY-MM-DDTHH:mm)
+            const dateVal = document.getElementById('b-date').value;
+            // Ubah ke format ISO yang sesuai dengan Google Calendar (tambah detik :00)
+            const isoDate = dateVal + ":00"; 
 
-/* ======================
-   CHAT TEST
-====================== */
+            const payload = {
+                action: 'booking',
+                name: document.getElementById('b-name').value,
+                email: document.getElementById('b-email').value,
+                date: isoDate,
+                notes: document.getElementById('b-notes').value
+            };
 
-async function sendChat() {
+            try {
+                const res = await fetchAPI(payload);
+                if (res.status === 'success') {
+                    showToast('✅ Booking Berhasil Dibuat!', 'success');
+                    bookingForm.reset();
+                } else {
+                    showToast('❌ ' + (res.message || 'Gagal membuat booking'), 'error');
+                }
+            } catch (err) {
+                showToast('❌ Error jaringan.', 'error');
+            } finally {
+                btnBooking.disabled = false;
+                btnBooking.innerHTML = 'Proses Booking';
+            }
+        });
 
-const message = document.getElementById("chatInput").value;
+        // ================= LOGIC LEAD =================
+        const leadForm = document.getElementById('lead-form');
+        const btnLead = document.getElementById('btn-lead');
 
-const res = await fetch(API_URL, {
-method: "POST",
-headers: {
-"Content-Type": "application/json"
-},
-body: JSON.stringify({
-action: "chat",
-message: message,
-session_id: "test-session"
-})
-});
+        leadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            btnLead.disabled = true;
+            btnLead.innerHTML = 'Menyimpan...';
 
-const data = await res.json();
+            const payload = {
+                action: 'save_lead',
+                name: document.getElementById('l-name').value,
+                email: document.getElementById('l-email').value,
+                interest: document.getElementById('l-interest').value,
+                source: "Manual Frontend"
+            };
 
-document.getElementById("chatResult").innerText =
-data.reply || JSON.stringify(data);
+            try {
+                const res = await fetchAPI(payload);
+                if (res.status === 'success') {
+                    showToast('✅ Data Lead Tersimpan!', 'success');
+                    leadForm.reset();
+                } else {
+                    showToast('❌ Gagal menyimpan lead', 'error');
+                }
+            } catch (err) {
+                showToast('❌ Error jaringan.', 'error');
+            } finally {
+                btnLead.disabled = false;
+                btnLead.innerHTML = 'Simpan Lead';
+            }
+        });
 
-}
-
-
-/* ======================
-   BOOKING TEST
-====================== */
-
-async function bookMeeting() {
-
-const name = document.getElementById("name").value;
-const email = document.getElementById("email").value;
-const date = document.getElementById("date").value;
-const notes = document.getElementById("notes").value;
-
-const res = await fetch(API_URL, {
-method: "POST",
-headers: {
-"Content-Type": "application/json"
-},
-body: JSON.stringify({
-action: "booking",
-name: name,
-email: email,
-date: date,
-notes: notes
-})
-});
-
-const data = await res.json();
-
-document.getElementById("bookingReult").innerText =
-JSON.stringify(data, null, 2);
-
-}
-
-</script>
-
+    </script>
 </body>
 </html>
