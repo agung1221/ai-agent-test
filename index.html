@@ -121,7 +121,280 @@
     <!-- ================= JAVASCRIPT LOGIC ================= -->
     <script>
         // URL Web App GAS Anda
-        const API_URL = "https://script.google.com/macros/s/AKfycbxkh3j9L8Z1axVqAKy2g85YYjpnT4DSFkrpRzv7dcz_DgpUc1MdezpB1b7_trfslRFb/exec";
+        const API_URL = "/**
+ * KONFIGURASI SISTEM
+ */
+const CONFIG = {
+  docId: '1MD_-qfxGrwFgQleaRgo3uBT-gH_7Prz08R1Vuhkg3LI',
+  sheetId: '1VqHnoyGYPMuAIOoAScv3wLzndRBiIqK9b79ewE2lWuI',
+  aiEndpoint: 'https://ai.sumopod.com/v1/chat/completions',
+  aiModel: 'gemini/gemini-3-pro-preview',
+  calendarId: 'primary'
+};
+
+function doPost(e) {
+  try {
+    if (!e || !e.postData || !e.postData.contents) {
+      return responseJSON({ status: 'error', message: 'No data received' });
+    }
+
+    const data = JSON.parse(e.postData.contents);
+    
+    // Rute action dari frontend (jika masih pakai form manual)
+    if (data.action === 'chat') return handleChat(data);
+    if (data.action === 'booking') return responseJSON(processBookingLogic(data));
+    
+    return responseJSON({ status: 'error', message: 'Invalid action' });
+  } catch (error) {
+    return responseJSON({ status: 'error', message: "Internal Server Error" });
+  }
+}
+
+/**
+ * ==========================================
+ * FITUR AI CHAT (BOOKING & RESCHEDULE)
+ * ==========================================
+ */
+function handleChat(data) {
+  const userMessage = data.message;
+  const historyFromFrontend = data.history || []; 
+  const knowledge = getKnowledge();
+  
+  let aiReply = callAI(userMessage, knowledge, historyFromFrontend);
+  let finalReplyToUser = aiReply;
+
+  // Deteksi JSON Intent dari balasan AI
+  try {
+    const jsonMatch = aiReply.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const aiIntentData = JSON.parse(jsonMatch[0]);
+      
+      // JIKA INTENT = BOOKING BARU
+      if (aiIntentData.intent === 'booking') {
+        const bookingResult = processBookingLogic(aiIntentData);
+        if (bookingResult.status === 'success') {
+          finalReplyToUser = `🎉 Jadwal konsultasi Anda telah berhasil dikonfirmasi untuk tanggal ${aiIntentData.date}.\n\nUndangan Google Meet sudah saya kirimkan ke email Anda (${aiIntentData.email}). Ada hal lain yang ingin didiskusikan?`;
+        } else {
+          finalReplyToUser = `Mohon maaf, jadwal tidak bisa diproses: ${bookingResult.message}. Silakan pilih jam atau hari yang lain.`;
+        }
+      } 
+      // JIKA INTENT = RESCHEDULE
+      else if (aiIntentData.intent === 'reschedule') {
+        const rescheduleResult = processRescheduleLogic(aiIntentData);
+        if (rescheduleResult.status === 'success') {
+          finalReplyToUser = `✅ Jadwal atas nama ${rescheduleResult.name} berhasil diubah ke tanggal ${aiIntentData.date}.\n\nPerubahan otomatis terupdate di Google Calendar Anda dengan link Meet yang sama. Ada lagi yang bisa saya bantu?`;
+        } else {
+          finalReplyToUser = `Mohon maaf, gagal mengubah jadwal: ${rescheduleResult.message}`;
+        }
+      }
+    }
+  } catch (e) {
+    // Balasan teks biasa, tidak ada eksekusi sistem
+  }
+
+  return responseJSON({ reply: finalReplyToUser });
+}
+
+function callAI(message, knowledge, chatHistory) {
+  const apiKey = PropertiesService.getScriptProperties().getProperty("AI_API_KEY");
+  if (!apiKey) return "Konfigurasi sistem belum lengkap.";
+
+  const todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
+
+  const systemPrompt = `
+Anda adalah AI Consultant dari AgungAI. Hari ini tanggal ${todayStr}.
+Knowledge Base: ${knowledge}.
+
+ATURAN SANGAT PENTING:
+Aturan jadwal: Maksimal 3 slot sehari, jeda antar sesi minimal 2 jam.
+Jika data terkumpul, JANGAN balas teks, tapi WAJIB keluarkan HANYA format JSON.
+
+1. INTENT BOOKING BARU
+Data wajib: Nama, Email, Tanggal & Jam.
+Format:
+{"intent": "booking", "name": "Budi", "email": "budi@email.com", "date": "2024-05-15T10:00:00", "notes": "-"}
+
+2. INTENT RESCHEDULE (Ubah Jadwal)
+Jika user ingin ubah jadwal, Anda hanya perlu meminta EMAIL dan TANGGAL/JAM BARU. Tidak perlu tanya nama lagi.
+Format:
+{"intent": "reschedule", "email": "budi@email.com", "date": "2024-05-20T14:00:00"}
+`;
+
+  let messagesPayload = [{ "role": "system", "content": systemPrompt }];
+  if (chatHistory.length > 0) messagesPayload = messagesPayload.concat(chatHistory);
+  messagesPayload.push({ "role": "user", "content": message });
+
+  const payload = { "model": CONFIG.aiModel, "messages": messagesPayload, "temperature": 0.2, "max_tokens": 500 };
+  const options = { "method": "post", "contentType": "application/json", "headers": { "Authorization": "Bearer " + apiKey }, "payload": JSON.stringify(payload), "muteHttpExceptions": true };
+
+  try {
+    const response = UrlFetchApp.fetch(CONFIG.aiEndpoint, options);
+    const json = JSON.parse(response.getContentText());
+    if (json.error) return "Maaf, saya sedang mengalami kendala teknis.";
+    return (json.choices && json.choices.length > 0) ? json.choices[0].message.content : "Tidak ada jawaban.";
+  } catch (error) { return "Maaf, koneksi AI terputus."; }
+}
+
+function getKnowledge() {
+  try { return DocumentApp.openById(CONFIG.docId).getBody().getText(); } 
+  catch (error) { return "Knowledge base error."; }
+}
+
+/**
+ * ==========================================
+ * LOGIKA BOOKING & RESCHEDULE (HANYA 1 SHEET)
+ * ==========================================
+ */
+
+// 1. Logika Pembuatan Booking Baru
+function processBookingLogic(data) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000); 
+    const checkResult = checkDynamicSchedule(data.date);
+    if (!checkResult.available) return { status: 'error', message: checkResult.message };
+
+    const eventId = createCalendarEvent(data.name, data.email, data.date, data.notes);
+    if (!eventId) throw new Error("Gagal membuat Calendar Event.");
+
+    saveBooking(data, eventId);
+    return { status: 'success', message: 'Booking berhasil' };
+  } catch (error) {
+    return { status: 'error', message: error.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// 2. Logika Ubah Jadwal (Reschedule)
+function processRescheduleLogic(data) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    const sheet = SpreadsheetApp.openById(CONFIG.sheetId).getSheetByName('bookings');
+    const values = sheet.getDataRange().getValues();
+    
+    let targetRow = -1;
+    let oldEventId = null;
+    let clientName = "";
+
+    // Cari booking berdasarkan email (dari bawah ke atas agar mendapat jadwal paling baru)
+    for (let i = values.length - 1; i >= 1; i--) {
+      // Kolom index 2 adalah Email
+      if (values[i][2].toString().toLowerCase() === data.email.toLowerCase()) {
+        targetRow = i + 1; // Baris di sheet mulai dari 1
+        clientName = values[i][1]; // Kolom index 1 adalah Nama
+        oldEventId = values[i][6]; // Kolom index 6 adalah Event ID Google Calendar
+        break;
+      }
+    }
+
+    if (targetRow === -1 || !oldEventId) {
+      return { status: 'error', message: 'Email tidak ditemukan dalam sistem kami.' };
+    }
+
+    // Cek jadwal dinamis (Tapi kecualikan Event ID ini, agar tidak bentrok dengan dirinya sendiri)
+    const checkResult = checkDynamicSchedule(data.date, oldEventId);
+    if (!checkResult.available) return { status: 'error', message: checkResult.message };
+
+    // Update Jam Google Calendar (TIDAK buat link meet baru, cukup geser jam)
+    const startTime = new Date(data.date);
+    const endTime = new Date(startTime.getTime() + (60 * 60 * 1000));
+    
+    Calendar.Events.patch({
+      start: { dateTime: startTime.toISOString() },
+      end: { dateTime: endTime.toISOString() }
+    }, CONFIG.calendarId, oldEventId, { sendUpdates: 'all' });
+
+    // Update Kolom Tanggal (Kolom ke-4/D) di Sheet
+    sheet.getRange(targetRow, 4).setValue(data.date);
+    // (Opsional) Kasih tanda di notes bahwa ini sudah direschedule
+    const currentNotes = sheet.getRange(targetRow, 5).getValue();
+    sheet.getRange(targetRow, 5).setValue(currentNotes + " [Rescheduled to " + data.date + "]");
+
+    return { status: 'success', name: clientName };
+  } catch (error) {
+    Logger.log("Reschedule Error: " + error.message);
+    return { status: 'error', message: error.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// 3. Logika Cek Jadwal (Dengan Pengecualian ID untuk Reschedule)
+function checkDynamicSchedule(requestedIsoDate, excludeEventId = null) {
+  const reqDate = new Date(requestedIsoDate);
+  const reqDateStr = Utilities.formatDate(reqDate, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  const reqTimeMs = reqDate.getTime();
+
+  const sheet = SpreadsheetApp.openById(CONFIG.sheetId).getSheetByName('bookings');
+  const data = sheet.getDataRange().getValues();
+
+  let sameDayCount = 0;
+
+  for (let i = 1; i < data.length; i++) {
+    const rowEventId = data[i][6]; // Ambil event ID
+    
+    // Jika sedang Reschedule, abaikan event miliknya sendiri dari pengecekan
+    if (excludeEventId && rowEventId === excludeEventId) continue;
+
+    const bookedDateVal = new Date(data[i][3]);
+    if (isNaN(bookedDateVal)) continue;
+
+    const bookedDateStr = Utilities.formatDate(bookedDateVal, Session.getScriptTimeZone(), "yyyy-MM-dd");
+
+    if (reqDateStr === bookedDateStr) {
+      sameDayCount++;
+      const bookedTimeMs = bookedDateVal.getTime();
+      const diffHours = Math.abs(reqTimeMs - bookedTimeMs) / (1000 * 60 * 60);
+
+      if (diffHours < 2) {
+        return { available: false, message: "Jadwal terlalu dekat dengan sesi lain (minimal jeda 2 jam)." };
+      }
+    }
+  }
+
+  if (sameDayCount >= 3) {
+    return { available: false, message: "Kuota harian sudah penuh (maksimal 3 sesi/hari)." };
+  }
+
+  return { available: true, message: "Tersedia" };
+}
+
+function createCalendarEvent(name, email, dateStr, notes) {
+  try {
+    const startTime = new Date(dateStr);
+    const endTime = new Date(startTime.getTime() + (60 * 60 * 1000));
+    
+    const eventResource = {
+      summary: "Konsultasi AI Automation - " + name,
+      description: `Agenda: Konsultasi AI\nCatatan: ${notes || '-'}\n\nLink Google Meet tersedia.`,
+      start: { dateTime: startTime.toISOString() },
+      end: { dateTime: endTime.toISOString() },
+      attendees: [{ email: email }],
+      conferenceData: {
+        createRequest: { requestId: Utilities.getUuid(), conferenceSolutionKey: { type: "hangoutsMeet" } }
+      }
+    };
+    const event = Calendar.Events.insert(eventResource, CONFIG.calendarId, { conferenceDataVersion: 1, sendUpdates: 'all' });
+    return event.id;
+  } catch (error) { throw new Error("Gagal membuat Calendar Event."); }
+}
+
+function saveBooking(data, eventId) {
+  SpreadsheetApp.openById(CONFIG.sheetId).getSheetByName('bookings').appendRow([
+    new Date(), data.name, data.email, data.date, data.notes || '', 'confirmed', eventId
+  ]);
+}
+
+function responseJSON(data) {
+  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function doOptions(e) {
+  return ContentService.createTextOutput("").setMimeType(ContentService.MimeType.TEXT)
+    .setHeaders({ "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, GET, OPTIONS", "Access-Control-Allow-Headers": "Content-Type" });
+}";
         
         // Generate Session ID acak untuk Chat
         const SESSION_ID = 'sess-' + Math.random().toString(36).substr(2, 9);
